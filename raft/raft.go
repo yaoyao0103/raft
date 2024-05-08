@@ -83,9 +83,9 @@ func (r *Raft) appendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntriesRes
 
 	// TODO: (A.1) - reply false if term < currentTerm
 	// Log: r.logger.Info("reject append entries since current term is older")
-	if req.GetTerm() < r.currentTerm{
+	if req.GetTerm() < r.currentTerm {
 		r.logger.Info("reject append entries since current term is older")
-		return &pb.AppendEntriesResponse{ Term: req.GetTerm(), Success: false }, nil
+		return &pb.AppendEntriesResponse{ Term: r.currentTerm, Success: false }, nil
 	}
 
 	// TODO: (A.2)* - reset the `lastHeartbeat`
@@ -117,7 +117,7 @@ func (r *Raft) appendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntriesRes
 		// Log: r.logger.Info("the given previous log from leader is missing or mismatched", zap.Uint64("prevLogId", prevLogId), zap.Uint64("prevLogTerm", prevLogTerm), zap.Uint64("logTerm", log.GetTerm()))
 		if log := r.getLog(prevLogId); log.GetTerm() != prevLogTerm {
 			r.logger.Info("the given previous log from leader is missing or mismatched", zap.Uint64("prevLogId", prevLogId), zap.Uint64("prevLogTerm", prevLogTerm), zap.Uint64("logTerm", log.GetTerm()))
-			return &pb.AppendEntriesResponse{ Term: req.GetTerm(), Success: false }, nil
+			return &pb.AppendEntriesResponse{ Term: r.currentTerm, Success: false }, nil
 		}
 	}
 
@@ -313,8 +313,8 @@ func (r *Raft) voteForSelf(grantedVotes *int) {
 	// TODO: (A.10) increment currentTerm
 	// TODO: (A.10) vote for self
 	// Hint: use `voteFor` to vote for self
-	(*grantedVotes)++
 	r.voteFor(r.id, true)
+	(*grantedVotes)++
 	r.logger.Info("vote for self", zap.Uint64("term", r.currentTerm))
 }
 
@@ -356,6 +356,7 @@ func (r *Raft) handleVoteResult(vote *voteResult, grantedVotes *int, votesNeeded
 	if vote.GetTerm() > r.currentTerm {
 		r.toFollower(vote.GetTerm())
 		r.logger.Info("receive new term on RequestVote response, fallback to follower", zap.Uint32("peer", vote.peerId))
+		return
 	}
 
 	if vote.VoteGranted {
@@ -428,12 +429,13 @@ func (r *Raft) broadcastAppendEntries(ctx context.Context, appendEntriesResultCh
 			Term: 			r.currentTerm,
 			LeaderId: 		r.id,
 			LeaderCommitId: r.commitIndex,
+			Entries:		r.getLogs(r.nextIndex[peerId]),
 		}
 		prevLog := r.getLog(r.nextIndex[peerId]-1)
+
 		if prevLog != nil {
 			req.PrevLogId = prevLog.GetId()
 			req.PrevLogTerm = prevLog.GetTerm()
-			req.Entries = r.getLogs(r.nextIndex[peerId])
 		}
 
 		// TODO: (A.14) & (B.6)
@@ -482,8 +484,9 @@ func (r *Raft) handleAppendEntriesResult(result *appendEntriesResult) {
 		// TODO: (B.8) - if successful: update nextIndex and matchIndex for follower
 		// Hint: use `setNextAndMatchIndex` to update nextIndex and matchIndex
 		// Log: logger.Info("append entries successfully, set next index and match index", zap.Uint32("peer", result.peerId), zap.Uint64("nextIndex", nextIndex), zap.Uint64("matchIndex", matchIndex))
-		ni++
-		r.setNextAndMatchIndex(result.peerId, ni, mi)
+		mi = entries[len(entries)-1].GetId()
+		ni = mi + 1
+		r.setNextAndMatchIndex(peerId, ni, mi)
 		r.logger.Info("append entries successfully, set next index and match index", zap.Uint32("peer", peerId), zap.Uint64("nextIndex", ni), zap.Uint64("matchIndex", mi))
 	}
 
@@ -495,16 +498,20 @@ func (r *Raft) handleAppendEntriesResult(result *appendEntriesResult) {
 		// Hint: find if such N exists
 		// Hint: if such N exists, use `setCommitIndex` to set commit index
 		// Hint: if such N exists, use `applyLogs` to apply logs
+		if logs[i].GetTerm() != r.currentTerm {
+			continue
+		}
 		replicas := 1
-		for peerId, _ := range r.peers {
-			if r.matchIndex[peerId] >= logs[i].GetId() && logs[i].GetTerm() == r.currentTerm {
+		for peerId := range r.peers {
+			if r.matchIndex[peerId] >= logs[i].GetId(){
 				replicas++
 			}
 		}
 				
 		if replicas >= replicasNeeded {
 			r.setCommitIndex(logs[i].GetId()) 
-			r.applyLogs(r.applyCh);
+			go r.applyLogs(r.applyCh);
+			break;
 		}
 	}
 }
