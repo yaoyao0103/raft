@@ -461,7 +461,6 @@ func (r *Raft) handleAppendEntriesResult(result *appendEntriesResult) {
 	// Hint: use `toFollower` to convert to follower
 	// Log: r.logger.Info("receive new term on AppendEntries response, fallback to follower", zap.Uint32("peer", result.peerId))
 	if result.req.GetTerm() > r.currentTerm {
-		r.currentTerm = result.req.GetTerm()
 		r.toFollower(result.req.GetTerm())
 		r.logger.Info("receive new term on AppendEntries response, fallback to follower", zap.Uint32("peer", result.peerId))
 		return
