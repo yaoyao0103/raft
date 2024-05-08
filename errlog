@@ -1,0 +1,6 @@
+--- FAIL: TestSingleLogReplication (1.52s)
+--- FAIL: TestManyLogsReplication (9.00s)
+--- FAIL: TestLogReplicationWithFollowerFailure (2.02s)
+--- FAIL: TestLogReplicationWithLeaderFailover (6.01s)
+--- FAIL: TestOnlyUpToDateCandidateWinLeaderElection (2.52s)
+--- FAIL: TestCannotCommitLogIfTermMismatch (4.52s)
