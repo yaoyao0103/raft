@@ -461,8 +461,9 @@ func (r *Raft) handleAppendEntriesResult(result *appendEntriesResult) {
 	// Log: r.logger.Info("receive new term on AppendEntries response, fallback to follower", zap.Uint32("peer", result.peerId))
 	if result.req.GetTerm() > r.currentTerm {
 		r.currentTerm = result.req.GetTerm()
-		r.toFollower(r.currentTerm)
-		.logger.Info("receive new term on AppendEntries response, fallback to follower", zap.Uint32("peer", result.peerId))
+		r.toFollower(result.req.GetTerm())
+		r.logger.Info("receive new term on AppendEntries response, fallback to follower", zap.Uint32("peer", result.peerId))
+		return
 	}
 
 
@@ -472,13 +473,15 @@ func (r *Raft) handleAppendEntriesResult(result *appendEntriesResult) {
 		// TODO: (B.7) - if AppendEntries fails because of log inconsistency: decrease nextIndex and retry
 		// Hint: use `setNextAndMatchIndex` to decrease nextIndex
 		// Log: logger.Info("append entries failed, decrease next index", zap.Uint64("nextIndex", nextIndex), zap.Uint64("matchIndex", matchIndex))
-		r.setNextAndMatchIndex(result.peerId, nextIndex[result.peerId]-1, matchIndex)
+		nextIndex[result.peerId] = nextIndex[result.peerId] - 1
+		r.setNextAndMatchIndex(result.peerId, nextIndex[result.peerId], r.matchIndex[result.peerId])
 		logger.Info("append entries failed, decrease next index", zap.Uint64("nextIndex", nextIndex), zap.Uint64("matchIndex", matchIndex))
 	} else if len(entries) != 0 {
 		// TODO: (B.8) - if successful: update nextIndex and matchIndex for follower
 		// Hint: use `setNextAndMatchIndex` to update nextIndex and matchIndex
 		// Log: logger.Info("append entries successfully, set next index and match index", zap.Uint32("peer", result.peerId), zap.Uint64("nextIndex", nextIndex), zap.Uint64("matchIndex", matchIndex))
-		r.setNextAndMatchIndex(result.peerId, nextIndex[result.peerId]+1, matchIndex)
+		nextIndex[result.peerId] = nextIndex[result.peerId] + 1
+		r.setNextAndMatchIndex(result.peerId, nextIndex[result.peerId]+1, r.matchIndex[result.peerId])
 		logger.Info("append entries successfully, set next index and match index", zap.Uint32("peer", result.peerId), zap.Uint64("nextIndex", nextIndex), zap.Uint64("matchIndex", matchIndex))
 	}
 
@@ -491,6 +494,7 @@ func (r *Raft) handleAppendEntriesResult(result *appendEntriesResult) {
 		// Hint: if such N exists, use `setCommitIndex` to set commit index
 		// Hint: if such N exists, use `applyLogs` to apply logs
 
+		
 		replicas := 1
 
 		if replicas >= replicasNeeded {
