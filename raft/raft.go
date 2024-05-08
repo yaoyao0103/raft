@@ -104,7 +104,7 @@ func (r *Raft) appendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntriesRes
 	// TODO: (A.4) - if AppendEntries RPC received from new leader: convert to follower
 	// Log: r.logger.Info("receive request from leader, fallback to follower", zap.Uint64("term", r.currentTerm))
 	/*  */
-	if r.state != Follower {
+	if req.GetTerm() == r.currentTerm && r.state != Follower {
 		r.toFollower(req.GetTerm())
 		r.logger.Info("receive request from leader, fallback to follower", zap.Uint64("term", r.currentTerm))
 	}
